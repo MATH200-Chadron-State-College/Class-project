@@ -1,1 +1,199 @@
 
+---
+title: "Math 200 Project"
+author: "Gregory Moses"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F)
+options(digits = 3)
+
+library(tidyverse)
+library(ggplot2)
+library(readr)
+student_data<-read_csv("student_data.csv")
+attach(student_data)
+```
+
+### Data information
+
+This data was collected from my Math 142 (College Algebra) classes. It contains no personally identifiable student information, and the rows have been randomized to further protect student confidentiality.
+
+
+
+### Basic data cleaning
+
+Some columns that should be numerical have text entries. We discuss these on a case-by-case basis in the next section, but for now, we will convert this data to numerical data. That will also have the advantage of standardizing my "missing entry" notation; visually inspecting the data as it currently exists, we see both "n/a" and "none" used. We also perform some work with the "Homework" and "Classwork" columns and the Test2 column that we discuss in the "Basic Variable Information" section.
+
+```{r}
+student_data$Test4<-as.numeric(Test4)
+student_data$Homework<-as.numeric(Homework)
+student_data$Classwork<-as.numeric(Classwork)
+
+Participation<-as.data.frame((select(student_data, Homework,Classwork)))
+Participation<-rowMeans(Participation, na.rm = TRUE)
+student_data<-subset(student_data,select = -c(Homework,Classwork))
+student_data<-cbind(student_data,Participation)
+
+test_data<-subset(student_data,select = c(Test1,Test2, Test3, Test4))
+test_data$Test2[is.na(test_data$Test2)] <- rowMeans(test_data, na.rm = TRUE)[is.na(test_data$Test2)] 
+student_data$Test2<-test_data$Test2
+```
+
+
+### Basic variable information (descriptive)
+
+#### Year
+
+Year: The year of the class. I have data for the following years:
+
+```{r}
+print(unique(Year))
+```
+
+#### Semester
+
+The semester. I have data for the following semesters:
+```{r}
+print(unique(Semester))
+```
+In particular, I have never taught this course over the summer.
+
+#### Time
+
+The day and time of day I have taught the class. I have data for the following times:
+```{r}
+print(unique(Time))
+```
+We see three "regular" day/time combinations; two unique entries stemming from our transition to online learning during the outset of COVID; and one unique entry due to a scheduling error that was caught too late to fix.
+
+#### Enrollment
+
+The size of the class.
+
+#### Overall
+
+The student's final grade, measured on a scale from 0 to 100. I refer to this as "overall grade" throughout this document to prevent any confusion between it and the final exam grade.
+
+#### Letter
+The student's letter grade. Grades students have received are:
+```{r}
+print(unique(Letter))
+```
+Chadron State does not assign "+" or "-" grades. We see from the data that I have never assigned an Incomplete or other "atypical" grade. Grades are "ranked" in the expected way, F<D<C<B<A
+
+#### Test1, Test2, Test3, Test4
+
+The grades the student received on these tests (out of 100; students may occasionally receive higher grades due to extra credit opportunities). No student has ever legitimately earned a "0" on a test, so a grade of "0" means that the student did not attempt the test. On the other hand, I do not always get to the fourth test; this is reflected as a "NA" in that column.
+
+Analysis done a little later in this document also showed two "NA" grades in the Test2 column; this occurred because a student didn't take a test and, for whatever reason, I simply dropped it rather than have them make it up. The effect that had on the data is the same as replacing that "NA" with their test mean, which I did in "Basic data cleaning." I do not want to do that with Test4; there are so many NAs in that column that it would give a very inaccurate picture of the data to get rid of them.
+
+
+#### Final
+
+The final exam grade; it takes numbers between 0 and 100 (out of 100; students may occasionally receive higher grades due to extra credit opportunities).  No student as legitimately earned a "0" on the final exam, so that grade indicates that the student did not attempt the exam. Note that students who withdrew from the class were removed from my gradebook, and are not included in this data, so all students who did not attempt the final exam, still received a course grade.
+
+#### Participation
+In the data, there is a Homework and Classwork column, reflecting different ways I have used to attempt to make students practice the material. They are both recorded out of 100. There have been semesters where I have given one but not the other. 
+
+These categories are extremely fuzzy; for example, in recent semesters, I have given students in-class work that becomes homework if they do not finish it in class. Even when I have taught two classes at the same time with this method, there are times I called this a "homework grade" in one of my gradebooks, and a "classwork grade" in the other gradebook. I also always graded these categories extremely generously. I think it's best to understand both these columns as loosely measuring student participation, and have replaced them with a "Participation" column. This column records the Homework or Classwork grade (in semesters where I have had only one), or their mean (in semesters where I have had both.)
+
+### Elementary statistics
+
+Let's get some baseline information from our data set. 
+
+#### Overall and letter grades
+
+We'll look at our letter grade distribution.
+
+```{r}
+grade_count<-table(student_data$Letter)
+barplot(grade_count,main = "Letter Grade (all students)")
+```
+
+We'll also summarize the overall grades.
+
+```{r}
+summary(Overall)
+```
+
+Outside academia, it is often taken for granted that student grades should fall on a bell curve. I don't know any professors who regularly see this, unless they artificially curve their data. The data from the graph certainly doesn't look normal, but as an illustration of R's capabilities, let's perform the Shapiro–Wilk test.
+
+H_0: The data is normally distributed
+
+H_1: The data is not normally distributed
+
+```{r}
+shapiro.test(student_data$Overall)
+```
+We reject the null hypothesis; these grades are not normally distributed.
+
+#### Participation
+
+Let's investigate student participation
+
+```{r}
+summary(Participation)
+```
+
+#### Test grades
+
+The individual test grades might not be super meaningful, because the precise material that gets covered on each test tends to change from semester to semester. Still, we can at least ask and answer general questions, e.g. "Does it seem that students do better on earlier material than on later material?"
+
+```{r}
+test_data<-subset(student_data,select = c(Test1,Test2, Test3, Test4))
+summary(test_data)
+```
+
+Eyeballing this, it looks like performance is similar on the first three tests, but that the fourth test, when there is one, sees better performance.
+
+That's a little deceptive though. By the third test, there are usually students who are no longer participating in the class at all, and therefore take "0"s for skipped tests. We should look at those students, but it's also worth seeing what happens if we only look at students who complete the entire semester.
+
+
+```{r}
+test_data<-subset(student_data,select = c(Test1,Test2, Test3, Test4))
+test_nonzero<- filter(test_data, test_data$Test1 > 0, test_data$Test2 > 0, test_data$Test3 > 0, test_data$Test4 > 0)
+summary(test_nonzero)
+```
+
+
+We still don't see radical differences between the tests grades, but let's investigate this question further with the Kruskal-Wallis test. We select this test because student test scores are extremely non-normal, making the ANOVA inappropriate. We look at the variances of the test grades to find that the smallest variance was Test 4 (325) and the largest was Test 1 (389); these numbers are close enough that the Kruskal-Wallis test should be appropriate. To do this test, we should lengthen our data.
+
+Let's also remind ourselves of the hypotheses:
+
+H_0: The means of Test 1, Test 2, Test 3, and Test 4 are the same
+
+H_1: At least one of the means is significantly different
+
+
+```{r}
+
+for_kw<- test_nonzero %>%  pivot_longer(cols=c('Test1', 'Test2','Test3','Test4'),names_to='Test', values_to='Score')
+
+kruskal.test(Score ~ Test, data = for_kw)
+
+```
+
+Although the differences between tests doesn't seem large, the Kruskal-Wallis test suggests that it is significant. Let's investigate this further; are all the tests significantly different? We run the Pairwise Wilcox Test:
+
+H_0: The means of the two categories being compared are the same
+
+H_1: There is a difference between the means
+
+```{r}
+pairwise.wilcox.test(for_kw$Score, for_kw$Test,
+                 p.adjust.method = "BH")
+```
+
+Test 1 and Test 2 are similar to each other, but significantly different from Test 3 and Test 4. Test 3 and Test 4 are similar to each other, but significantly different from Test 1 and Test 2. Looking at the data, we see this; the means for Test 1 and Test 2 are close (76.4 and 74), the means for Test 3 and Test 4 are close (81.7 and 82.8)
+
+### Overall grade vs. Participation
+
+Ideally, class participation would be at least somewhat correlated to student performance; the alternative is too depressing to contemplate.
+
+```{r}
+cor(Participation, Overall,  method = "pearson")
+plot(Participation,Overall)
+
+```
+
