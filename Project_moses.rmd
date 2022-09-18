@@ -9,9 +9,8 @@ knitr::opts_chunk$set(echo = TRUE, message = F)
 options(digits = 3)
 
 library(tidyverse)
-library(ggplot2)
 library(readr)
-student_data<-read_csv("student_data.csv")
+student_data<-as.data.frame(read_csv("student_data.csv"))
 attach(student_data)
 ```
 
@@ -23,21 +22,31 @@ This data was collected from my Math 142 (College Algebra) classes. It contains 
 
 ### Basic data cleaning
 
-Some columns that should be numerical have text entries. We discuss these on a case-by-case basis in the next section, but for now, we will convert this data to numerical data. That will also have the advantage of standardizing my "missing entry" notation; visually inspecting the data as it currently exists, we see both "n/a" and "none" used. We also perform some work with the "Homework" and "Classwork" columns and the Test2 column that we discuss in the "Basic Variable Information" section.
+Some columns that should be numerical have text entries. We discuss these on a case-by-case basis in the next section, but for now, we will convert this data to numerical data. That will also have the advantage of standardizing my "missing entry" notation; visually inspecting the data as it currently exists, we see both "n/a" and "none" used. We also perform some work with the "Homework" and "Classwork" columns and the Test2 column that we discuss in the "Basic Variable Information" section. There was one "NA" in the final exam column, simply because I didn't bother to enter a "0" at the time; the student was already failing. I fix this.
 
 ```{r}
+class(student_data)
 student_data$Test4<-as.numeric(Test4)
 student_data$Homework<-as.numeric(Homework)
 student_data$Classwork<-as.numeric(Classwork)
 
-Participation<-as.data.frame((select(student_data, Homework,Classwork)))
+Participation<-(select(student_data, Homework,Classwork))
 Participation<-rowMeans(Participation, na.rm = TRUE)
 student_data<-subset(student_data,select = -c(Homework,Classwork))
 student_data<-cbind(student_data,Participation)
 
+
+student_data$Final[is.na(student_data$Final)] <- 0
+
+
+
 test_data<-subset(student_data,select = c(Test1,Test2, Test3, Test4))
 test_data$Test2[is.na(test_data$Test2)] <- rowMeans(test_data, na.rm = TRUE)[is.na(test_data$Test2)] 
 student_data$Test2<-test_data$Test2
+
+
+
+
 ```
 
 
@@ -187,13 +196,28 @@ pairwise.wilcox.test(for_kw$Score, for_kw$Test,
 
 Test 1 and Test 2 are similar to each other, but significantly different from Test 3 and Test 4. Test 3 and Test 4 are similar to each other, but significantly different from Test 1 and Test 2. Looking at the data, we see this; the means for Test 1 and Test 2 are close (76.4 and 74), the means for Test 3 and Test 4 are close (81.7 and 82.8)
 
-### Overall grade vs. Participation
+#### Final Exam Grade
 
-Ideally, class participation would be at least somewhat correlated to student performance; the alternative is too depressing to contemplate.
+The final exam is more meaningful to consider, since it always covers the same basic material.
+```{r}
+summary(Final)
+```
 
 ```{r}
-cor(Participation, Overall,  method = "pearson")
-plot(Participation,Overall)
-
+recent <- student_data[ which(Year > 2020),]
+summary(recent$Final)
 ```
+
+### Participation vs. Final Exam Grade
+
+Hopefully, student participation is corrolated with student success. We select the final exam as a measure of student success (rather than the course grade), because participation is included in the course grade; it's fatuous to talk about them being corrolated.
+
+```{r}
+student_data$Participation<-unlist(Participation)
+student_data$Final<-unlist(Final)
+ggplot(student_data, aes(Participation, Final)) +    geom_point()
+cor(Participation,Final)
+```
+
+Looking at the data, students who give up before they take the final exam will obviously not be impacted by Participation, hence the points on the horizontal axis. Let's try removing those from the picture.
 
