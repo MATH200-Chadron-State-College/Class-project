@@ -11,7 +11,6 @@ options(digits = 3)
 library(tidyverse)
 library(readr)
 student_data<-as.data.frame(read_csv("student_data.csv"))
-attach(student_data)
 ```
 
 ### Data information
@@ -25,10 +24,9 @@ This data was collected from my Math 142 (College Algebra) classes. It contains 
 Some columns that should be numerical have text entries. We discuss these on a case-by-case basis in the next section, but for now, we will convert this data to numerical data. That will also have the advantage of standardizing my "missing entry" notation; visually inspecting the data as it currently exists, we see both "n/a" and "none" used. We also perform some work with the "Homework" and "Classwork" columns and the Test2 column that we discuss in the "Basic Variable Information" section. There was one "NA" in the final exam column, simply because I didn't bother to enter a "0" at the time; the student was already failing. I fix this.
 
 ```{r}
-class(student_data)
-student_data$Test4<-as.numeric(Test4)
-student_data$Homework<-as.numeric(Homework)
-student_data$Classwork<-as.numeric(Classwork)
+student_data$Test4<-as.numeric(student_data$Test4)
+student_data$Homework<-as.numeric(student_data$Homework)
+student_data$Classwork<-as.numeric(student_data$Classwork)
 
 Participation<-(select(student_data, Homework,Classwork))
 Participation<-rowMeans(Participation, na.rm = TRUE)
@@ -39,13 +37,12 @@ student_data<-cbind(student_data,Participation)
 student_data$Final[is.na(student_data$Final)] <- 0
 
 
-
 test_data<-subset(student_data,select = c(Test1,Test2, Test3, Test4))
 test_data$Test2[is.na(test_data$Test2)] <- rowMeans(test_data, na.rm = TRUE)[is.na(test_data$Test2)] 
 student_data$Test2<-test_data$Test2
 
 
-
+nonzero_data<-student_data[student_data$Final !=0,]
 
 ```
 
@@ -57,14 +54,14 @@ student_data$Test2<-test_data$Test2
 Year: The year of the class. I have data for the following years:
 
 ```{r}
-print(unique(Year))
+print(unique(student_data$Year))
 ```
 
 #### Semester
 
 The semester. I have data for the following semesters:
 ```{r}
-print(unique(Semester))
+print(unique(student_data$Semester))
 ```
 In particular, I have never taught this course over the summer.
 
@@ -72,7 +69,7 @@ In particular, I have never taught this course over the summer.
 
 The day and time of day I have taught the class. I have data for the following times:
 ```{r}
-print(unique(Time))
+print(unique(student_data$Time))
 ```
 We see three "regular" day/time combinations; two unique entries stemming from our transition to online learning during the outset of COVID; and one unique entry due to a scheduling error that was caught too late to fix.
 
@@ -87,7 +84,7 @@ The student's final grade, measured on a scale from 0 to 100. I refer to this as
 #### Letter
 The student's letter grade. Grades students have received are:
 ```{r}
-print(unique(Letter))
+print(unique(student_data$Letter))
 ```
 Chadron State does not assign "+" or "-" grades. We see from the data that I have never assigned an Incomplete or other "atypical" grade. Grades are "ranked" in the expected way, F<D<C<B<A
 
@@ -95,7 +92,7 @@ Chadron State does not assign "+" or "-" grades. We see from the data that I hav
 
 The grades the student received on these tests (out of 100; students may occasionally receive higher grades due to extra credit opportunities). No student has ever legitimately earned a "0" on a test, so a grade of "0" means that the student did not attempt the test. On the other hand, I do not always get to the fourth test; this is reflected as a "NA" in that column.
 
-Analysis done a little later in this document also showed two "NA" grades in the Test2 column; this occurred because a student didn't take a test and, for whatever reason, I simply dropped it rather than have them make it up. The effect that had on the data is the same as replacing that "NA" with their test mean, which I did in "Basic data cleaning." I do not want to do that with Test4; there are so many NAs in that column that it would give a very inaccurate picture of the data to get rid of them.
+Analysis done a little later in this document also showed (before data cleaning) two "NA" grades in the Test2 column; this occurred because a student didn't take a test and, for whatever reason, I simply dropped it rather than have them make it up. The effect that had on the data is the same as replacing that "NA" with their test mean, which I did in "Basic data cleaning." I do not want to do that with Test4; there are so many NAs in that column that it would give a very inaccurate picture of the data to get rid of them.
 
 
 #### Final
@@ -111,6 +108,17 @@ These categories are extremely fuzzy; for example, in recent semesters, I have g
 
 Let's get some baseline information from our data set. 
 
+#### Year
+
+```{r}
+year_count<-table(student_data$Year)
+barplot(year_count,main = "Year")
+```
+
+We see nothing really interesting here. "2018" is artificially stunted because I only have partial data from 2018; 2022 for the same reason. In 2021 we hired Jordan Haas to help reduce faculty overload, and that is reflected in the data.
+
+#### Semester
+
 #### Overall and letter grades
 
 We'll look at our letter grade distribution.
@@ -123,8 +131,47 @@ barplot(grade_count,main = "Letter Grade (all students)")
 We'll also summarize the overall grades.
 
 ```{r}
-summary(Overall)
+summary(student_data$Overall)
 ```
+
+
+
+
+
+#### Test grades
+
+The exact material covered by each test varies from semester to semester, but are similar enough that it is meaningful to ask about student performance on individual tests.
+
+```{r}
+test_data<-subset(student_data,select = c(Test1,Test2, Test3, Test4))
+summary(test_data)
+for_box<- test_data %>%  pivot_longer(cols=c('Test1', 'Test2','Test3','Test4'),names_to='Test', values_to='Score')
+for_box <- for_box %>% na.omit()
+
+ggplot(for_box, aes(x=Test,y=Score)) + geom_boxplot()
+
+```
+
+
+#### Final Exam Grade
+
+We summarize the final exam grades.
+
+```{r}
+summary(student_data$Final)
+boxplot(student_data$Final,main = "Final exam scores", ylab = "Scores")
+```
+
+#### Participation
+
+We summarize student participation
+
+```{r}
+summary(student_data$Participation)
+boxplot (student_data$Participation, main = "Student Participation",ylab="Participation grade")
+```
+
+### Research question: Are course grades normally distributed?
 
 Outside academia, it is often taken for granted that student grades should fall on a bell curve. I don't know any professors who regularly see this, unless they artificially curve their data. The data from the graph certainly doesn't look normal, but as an illustration of R's capabilities, let's perform the Shapiro–Wilk test.
 
@@ -137,20 +184,11 @@ shapiro.test(student_data$Overall)
 ```
 We reject the null hypothesis; these grades are not normally distributed.
 
-#### Participation
+### Research question: Do students perform differently on different tests?
 
-Let's investigate student participation
-
-```{r}
-summary(Participation)
-```
-
-#### Test grades
-
-The individual test grades might not be super meaningful, because the precise material that gets covered on each test tends to change from semester to semester. Still, we can at least ask and answer general questions, e.g. "Does it seem that students do better on earlier material than on later material?"
+The precise material that is on each test varies from semester to semester, but is consistent enough that this is a meaningful question. We start by reproducing our data summary.
 
 ```{r}
-test_data<-subset(student_data,select = c(Test1,Test2, Test3, Test4))
 summary(test_data)
 ```
 
@@ -196,28 +234,28 @@ pairwise.wilcox.test(for_kw$Score, for_kw$Test,
 
 Test 1 and Test 2 are similar to each other, but significantly different from Test 3 and Test 4. Test 3 and Test 4 are similar to each other, but significantly different from Test 1 and Test 2. Looking at the data, we see this; the means for Test 1 and Test 2 are close (76.4 and 74), the means for Test 3 and Test 4 are close (81.7 and 82.8)
 
-#### Final Exam Grade
 
-The final exam is more meaningful to consider, since it always covers the same basic material.
-```{r}
-summary(Final)
-```
+### Research question: Is participation correlated to the final exam grade?
+
+Hopefully, student participation is correlated with student success. We select the final exam as a measure of student success (rather than the course grade), because participation is included in the course grade; it's fatuous to talk about them being correlated. We will start by looking for linear correlation, although there's no particular reason it should be linear.
 
 ```{r}
-recent <- student_data[ which(Year > 2020),]
-summary(recent$Final)
-```
 
-### Participation vs. Final Exam Grade
-
-Hopefully, student participation is corrolated with student success. We select the final exam as a measure of student success (rather than the course grade), because participation is included in the course grade; it's fatuous to talk about them being corrolated.
-
-```{r}
-student_data$Participation<-unlist(Participation)
-student_data$Final<-unlist(Final)
 ggplot(student_data, aes(Participation, Final)) +    geom_point()
-cor(Participation,Final)
+cor(student_data$Participation,student_data$Final)
 ```
 
-Looking at the data, students who give up before they take the final exam will obviously not be impacted by Participation, hence the points on the horizontal axis. Let's try removing those from the picture.
+We see what would normally be thought of as a moderate correlation (0.5<r<0.7). 
+
+<!-- Looking at the data, students who give up before they take the final exam will obviously not be impacted by Participation (i.e. they will get a 0 automatically), hence the points on the horizontal axis. Let's try removing those from the picture. We do so with the understanding that we will look at students who did not take the final exam separately. -->
+
+```{r}
+# library(devtools)
+# install_github("ProcessMiner/nlcor")
+# ggplot(nonzero_data, aes(Participation, Final)) +    geom_point()
+# 
+# nonzero_cor<- nlcor(nonzero_data$Participation,nonzero_data$Final,plt = T)
+# 
+# nonzero_cor$cor.estimate
+```
 
