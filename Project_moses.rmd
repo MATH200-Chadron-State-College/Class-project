@@ -1,0 +1,477 @@
+
+---
+title: "Math 200 Project"
+author: "Gregory Moses"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+options(digits = 3)
+
+library(tidyverse)
+library(gplots)
+library(readr)
+library(RColorBrewer)
+library(car)
+library(reshape2)
+student_data<-as.data.frame(read_csv("https://raw.githubusercontent.com/MATH200-Chadron-State-College/Class-project/main/Student_data.csv"))
+
+print1<-function(input_data) {return(print(input_data,row.names=FALSE))}
+```
+
+Introductory notes
+
+### Data information
+
+This data was collected from my Math 142 (College Algebra) classes. It contains no personally identifiable student information, and the rows have been randomized to further protect student confidentiality.  299 students are represented in the data.
+
+
+
+
+### Basic data cleaning
+
+Some columns that should be numerical have text entries. We discuss these on a case-by-case basis in the next section, but for now, we will convert this data to numerical data. That will also have the advantage of standardizing my "missing entry" notation; visually inspecting the data as it currently exists, we see both "n/a" and "none" used. We also perform some work with the "Homework" and "Classwork" columns and the Test2 column that we discuss in the "Basic Variable Information" section. There was one "NA" in the final exam column, simply because I didn't bother to enter a "0" at the time; the student was already failing. I fix this.
+
+```{r}
+student_data$Test4<-as.numeric(student_data$Test4)
+student_data$Homework<-as.numeric(student_data$Homework)
+student_data$Classwork<-as.numeric(student_data$Classwork)
+
+Participation<-(select(student_data, Homework,Classwork))
+Participation<-rowMeans(Participation, na.rm = TRUE)
+student_data<-subset(student_data,select = -c(Homework,Classwork))
+student_data<-cbind(student_data,Participation)
+
+
+student_data$Final[is.na(student_data$Final)] <- 0
+
+
+test_data<-subset(student_data,select = c(Test1,Test2, Test3, Test4))
+test_data$Test2[is.na(test_data$Test2)] <- rowMeans(test_data, na.rm = TRUE)[is.na(test_data$Test2)] 
+student_data$Test2<-test_data$Test2
+
+
+nonzero_data<-student_data[student_data$Final !=0,]
+
+```
+
+
+### Basic variable information (descriptive)
+
+We briefly discuss the data we have collected.
+
+#### Year
+
+Year: The year of the class. I have data for the following years:
+
+```{r}
+print(unique(student_data$Year))
+```
+
+However, my data from 2018 is stunted; changes in Sakai have made my earliest gradebooks unavailable to me. My data from 2022 is incomplete because I am including no data from the current (Fall) semester.
+
+
+#### Semester
+
+The semester. I have data for the following semesters:
+```{r}
+print(unique(student_data$Semester))
+```
+In particular, I have never taught this course over the summer.
+
+#### Time
+
+The day and time of day I have taught the class. I have taught during the following times:
+```{r}
+print(unique(student_data$Time))
+```
+We see three "regular" day/time combinations; two unique entries stemming from our transition to online learning during the outset of COVID; and one unique entry due to a scheduling error that was caught too late to fix.
+
+
+#### Enrollment
+
+The size of the class.
+
+#### Overall
+
+The student's final grade, measured on a scale from 0 to 100. I refer to this as "overall grade" throughout this document to prevent any confusion between it and the final exam grade. 
+
+#### Letter
+The student's letter grade. Letter grades students have received are:
+```{r}
+print(unique(student_data$Letter))
+```
+In particular, Chadron State does not assign "+" or "-" grades. We see from the data that I have never assigned an Incomplete or other "atypical" grade. Grades are "ranked" in the expected way, F<D<C<B<A
+
+
+#### Test1, Test2, Test3, Test4
+
+The grades the student received on these tests (out of 100; students may occasionally receive higher grades due to extra credit opportunities). No student has ever legitimately earned a "0" on a test, so a grade of "0" means that the student did not attempt the test. On the other hand, I do not always get to the fourth test; this is reflected as a "NA" in that column.
+
+Analysis done a little later in this document also showed (before data cleaning) two "NA" grades in the Test2 column; this occurred because a student didn't take a test and, for whatever reason, I simply dropped it rather than have them make it up. The effect that had on the data is the same as replacing that "NA" with their test mean, which I did in "Basic data cleaning." I do not want to do that with Test4; there are so many NAs in that column that it would give a very inaccurate picture of the data to get rid of them.
+
+
+#### Final
+
+The final exam grade; it takes numbers between 0 and 100 (out of 100; students may occasionally receive higher grades due to extra credit opportunities).  No student as legitimately earned a "0" on the final exam, so that grade indicates that the student did not attempt the exam. Note that students who withdrew from the class were removed from my gradebook, and are not included in this data, so all students who did not attempt the final exam, still received a course grade.
+
+#### Participation
+In the data, there is a Homework and Classwork column, reflecting different ways I have used to attempt to make students practice the material. They are both recorded out of 100. There have been semesters where I have given one but not the other. 
+
+These categories are extremely fuzzy; for example, in recent semesters, I have given students in-class work that becomes homework if they do not finish it in class. Even when I have taught two classes at the same time with this method, there are times I called this a "homework grade" in one of my gradebooks, and a "classwork grade" in the other gradebook. I also always graded these categories extremely generously. I think it's best to understand both these columns as loosely measuring student participation, and have replaced them with a "Participation" column. This column records the Homework or Classwork grade (in semesters where I have had only one), or their mean (in semesters where I have had both.)
+
+
+
+
+
+### Research question: Does class size vary by semester?
+
+I have removed both 2018 and 2022 data from the following, since data from both years is incomplete.
+
+```{r}
+for_semester_count<- filter(student_data, student_data$Year > 2018, student_data$Year < 2022)
+
+p<-ggplot(data=for_semester_count, aes(x=Semester, fill=Semester,color=Semester)) +
+  geom_bar()
+
+print(p)
+```
+
+
+
+This is a genuine difference; the data contains only one more Fall class than Spring class, which is not by itself enough to explain the obvious disparity that we see.
+
+### Research question: Elementary statistics concerning enrollment
+
+Enrollment is not that interesting by itself (we will ask the natural question, whether class size is correlated with grade, later in this document), but we present the summary information.
+
+```{r}
+summary(student_data$Enrollment)
+```
+
+### Research question: Overall, how have students performed in Math 141?
+
+
+We'll look at our letter grade distribution.
+
+```{r}
+grade_count<-table(student_data$Letter)
+coul <- brewer.pal(5, "Set2") 
+barplot(grade_count,main = "Letter Grade (all students)",col=coul)
+```
+
+We'll also summarize the overall grades.
+
+```{r}
+summary(student_data$Overall)
+```
+
+
+
+
+### Research question: Elementary statistics concerning participation
+
+Participation is not that interesting by itself (we will ask the natural question, whether participation is correlated with grade, later in this document), especially because the way that participation is measured is not constant from year to year. But, we present the summary information.
+
+```{r}
+summary(student_data$Participation)
+
+
+```
+
+### Research question: Are course grades normally distributed?
+
+Outside academia, it is often taken for granted that student grades should fall on a bell curve. I don't know any professors who regularly see this, unless they artificially curve their data. The data from the graph certainly doesn't look normal, but as an illustration of R's capabilities, let's perform the Shapiro–Wilk test.
+
+H_0: The data is normally distributed
+
+H_1: The data is not normally distributed
+
+```{r}
+shapiro.test(student_data$Overall)
+```
+We reject the null hypothesis; these course grades are not normally distributed.
+
+```{r}
+qqPlot(student_data$Overall)
+title(main = "Q-Q Plot")
+```
+
+### Research question: Do students perform differently on different tests?
+The exact material covered by each test varies from semester to semester, but are similar enough that it is meaningful to ask about student performance on individual tests (when I have had a Test 4 it has not been because the other tests covered less material, but because I moved a little faster and had more material to test). We start by looking at the test grades.
+
+```{r}
+test_data<-subset(student_data,select = c(Test1,Test2, Test3, Test4,Final))
+summary(test_data)
+for_box<- test_data %>%  pivot_longer(cols=c('Test1', 'Test2','Test3','Test4','Final'),names_to='Test', values_to='Score')
+for_box <- for_box %>% na.omit()
+
+ggplot(for_box, aes(x=Test,y=Score)) + geom_boxplot()
+
+```
+
+
+Eyeballing this, it looks like performance is similar on the first three tests, but that the fourth test, when there is one, sees better performance, and the Final Exam sees worse.
+
+Let's investigate this question further with the Kruskal-Wallis test. We select this test because student test scores are extremely non-normal, making the ANOVA inappropriate. We look at the variances of the test grades to find that the smallest variance was Test 4 (325) and the largest was Test 1 (389); these numbers are close enough that the Kruskal-Wallis test (p=0.05) should be appropriate. To do this test, we should lengthen our data.
+
+```{r}
+long_test<-test_data %>%  pivot_longer(cols=c('Test1', 'Test2','Test3','Test4','Final'),names_to='Test', values_to='Score')
+```
+
+Let's also remind ourselves of the hypotheses:
+
+H_0: The means of Test 1, Test 2, Test 3, and Test 4 are the same
+
+H_1: At least one of the means is significantly different
+
+
+```{r}
+
+kruskal.test(Score ~ Test, data = long_test)
+
+```
+
+The Kruskal-Wallis test suggests that significant differences exist. Let's investigate this further; are all the tests significantly different? We run the Pairwise Wilcox Test (p=0.05):
+
+H_0: The means of the two categories being compared are the same
+
+H_1: There is a difference between the means
+
+```{r}
+pairwise.wilcox.test(long_test$Score, long_test$Test,
+                 p.adjust.method = "BH")
+```
+
+The mean of the final test is significantly different from the means of the hourly tests, except for Test 2. The mean of the fourth test, when there is one, is significantly different from all the other means except for Test 3. Otherwise we do not see statistically significant differences between the means.
+
+This data is interesting because I actually had the idea that students performed better on the third test than the others. This certainly doesn't seem to be the case, but a little thought suggests where the idea came from: since I do not usually include students who skip tests in my means, we might expect to see improvement, not because the test is easier, but because my weakest students have already given up and skipped the test.
+
+### Research question: How do students perform on tests if we remove all students who give up on the course?
+
+Since no student has ever earned a "0" on the final exam, we can measure whether a student has "given up" in terms of whether they attempted the final exam. We look at this briefly, without performing any statistical tests.
+
+```{r}
+nonzero_test_data<-subset(nonzero_data,select = c(Test1,Test2, Test3, Test4,Final))
+
+nonzero_for_box<- nonzero_test_data %>%  pivot_longer(cols=c('Test1', 'Test2','Test3','Test4','Final'),names_to='Test', values_to='Score')
+nonzero_for_box <- nonzero_for_box %>% na.omit()
+
+ggplot(nonzero_for_box, aes(x=Test,y=Score)) + geom_boxplot()
+
+summary(nonzero_test_data)
+```
+We certainly see better means, but the mean for the third test is still about the same as the other means (because of the size of the data sets, those differences might be statistically significant, but they are not large); this idea I had was therefore false.
+
+### Research question: Is participation linearly correlated to the final exam grade?
+
+Hopefully, student participation is correlated with student success. We select the final exam as a measure of student success (rather than the course grade), because participation is included in the course grade; it's fatuous to talk about them being correlated. We will look for linear correlation, although there's no particular reason it should be linear.
+
+```{r}
+
+ggplot(student_data, aes(Participation, Final)) +    geom_point()
+cor(student_data$Participation,student_data$Final)
+```
+
+We see what would normally be thought of as a moderate correlation (0.5<r<0.7). 
+
+### Research question: Does the time of day a class is taught impact student performance?
+
+It is a sort of academic urban legend that students will perform better when the class is taught earlier, because students are tired and not paying attention late in the day. Let's look at the three "normal" times that I teach college algebra, and see what proportion of students receive each letter grade.
+
+```{r}
+time_vs_grade_standard_times <- subset(student_data, Time=='MTWR 200-250' | Time=="MW 100-150, TR 1230-0120" | Time== "MTWR 100-150")
+
+time_vs_grade_standard_times$Letter<-factor(time_vs_grade_standard_times$Letter)
+time_vs_grade_standard_times$Time<-factor(time_vs_grade_standard_times$Time)
+
+ggplot(data = time_vs_grade_standard_times, aes(x=Time, fill=Letter) ) + geom_bar(position="fill")
+```
+
+We very clearly see that classes taught from 1 - 2 see much better student performance than classes taught from 2 - 3, in terms of having significantly more A's, and significantly fewer F's. On the other hand, the class with inconsistent meeting times has the worst performance of all, so it's not as simple as saying that earlier classes are better. Interestingly, the proportion of "C" students seems to to be the same across the three standard class times.
+
+### Research question: Does the semester a class is taught impact student performance?
+
+It's another academic urban legend that students will do worse in the Fall than the Spring. The exact rational for this is murky, but we can easily check whether it is reflected in my grades.
+
+```{r}
+ggplot(data = time_vs_grade_standard_times, aes(x=Semester, fill=Letter) ) + geom_bar(position="fill")
+```
+
+The results are less clearly visible than for time, but certainly there seem to be differences.
+
+### Research question: Is the generally poorer student performance that we see in the Spring related to the generally poorer student performance we see in some time slots?
+
+We have seen that some class times are worse than others for students. The difference in semester performance might be explained away as having nothing to do with the semester at all, and be entirely due to bad classtimes only appearing in my schedule during the Spring. Let's investigate that question.
+
+```{r}
+time_vs_semester_bad_time<- filter(student_data, student_data$Time == "MW 100-150, TR 1230-0120")
+time_vs_semester_bad_time<- subset(time_vs_semester_bad_time,select = c(Year,Semester,Time))
+unique(time_vs_semester_bad_time)
+```
+
+```{r}
+time_vs_semester2<- filter(student_data, student_data$Time == "MTWR 200-250")
+time_vs_semester2<- subset(time_vs_semester2,select = c(Year,Semester,Time))
+unique(time_vs_semester2)
+```
+
+This was unexpected. While the worst time slot is evenly distributed over the semester, the second-worse time slot occurs exclusively in the better semester. Time slots cannot explain the differences in performance by semester.
+
+### Research question: Have student grades improved as I have gained experience as a professor?
+
+#### Letter grade distribution over time
+
+Let's start by looking at grade distributions over time.
+
+```{r}
+ggplot(data = student_data, aes(x=Year, fill=Letter) ) + geom_bar(position="fill")
+```
+
+This is heartening; after a rough year (2019), the number of F's I have given has trended clearly downwards, and the number of A's I have given has trended upwards.
+
+#### Overall grade over time (by year)
+
+Let's look at this graphically.
+
+```{r}
+grades_by_year<-student_data
+grades_by_year$Year<-as.character(grades_by_year$Year)
+ggplot(grades_by_year, aes(x=Year, y=Overall) ) + geom_boxplot()
+```
+
+Since 2019, the course mean has trended up, the quartiles have trended up, and the outliers (representing students who did exceptionally poorly), are going down. We saw this in the previous analysis as well, but so far, 2021 has been very slightly better than the current year, at least in terms of some metrics. At the moment, this doesn't trouble me; some fluctuations are to be expected. 
+
+#### Overall grade over time (by year and semester)
+
+We are losing some data by grouping the semesters together like we did in the last section (e.g. by considering 2021 as a unit, instead of as the 2021 Spring semester and the 2021 Fall semester). We can reclaim that information.
+
+```{r}
+year_sem<- data.frame(student_data$Year,
+                      student_data$Semester,
+                      student_data$Overall)
+colnames(year_sem)<-c("Year","Semester","Overall")
+year_sem_column<-paste(year_sem$Year, year_sem$Semester)
+year_sem<- data.frame(year_sem_column,year_sem$Overall)
+colnames(year_sem)<-c("Date","Overall")
+year_sem$Date<-factor(year_sem$Date, levels = c("2018 Fall","2019 Spring","2019 Fall","2020 Spring","2020 Fall","2021 Spring","2021 Fall","2022 Spring"))
+
+ggplot(year_sem, aes(x=Date, y=Overall)) + 
+  geom_boxplot()
+
+```
+
+Means have trended upwards except for one aberrant semester (2021 Spring). A quick investigation of the number of students in that semester...
+
+```{r}
+print(nrow(year_sem[year_sem$Date == "2021 Spring",]))
+```
+
+... concludes that that semester was aberrant because I only taught one class, which had unusually low enrollment, and was therefore very susceptible to outliers. In fact, we wonder if this is usually true (perhaps to a lesser extent), and therefore explains the fact (very visible in the box-plot) that the variance always seems to be higher in the Spring.
+
+
+### Research question: Is the number of classes I teach different depending on the semester? In particular, do I usually have fewer sections during the Spring?
+
+In my zeal to scrub all personally identifying data from my data set, I removed the "Section" information, but different classes must be taught at different times.
+
+```{r}
+year_sem_time<- data.frame(year_sem_column,student_data$Time)
+colnames(year_sem_time)<-c("Date","Time")
+year_sem_time_unique<-unique(year_sem_time)
+year_sem_time_unique<-year_sem_time_unique %>% count(Date)
+year_sem_time_unique$Date<-factor(year_sem_time_unique$Date,levels = c("2018 Fall","2019 Spring","2019 Fall","2020 Spring","2020 Fall","2021 Spring","2021 Fall","2022 Spring"))
+year_sem_time_unique <- year_sem_time_unique[order(year_sem_time_unique$Date),]
+print(year_sem_time_unique)
+```
+So, not really; Spring 2021 really was unusual. We do see that Spring 2022 also had one section; it is possible that the hire of a new faculty member will have me permanently off overload in Spring semesters.
+
+We have stated that our data from Fall 2018 is partial, so if we restrict ourselves entirely to the data set, it is not clear what to make of the fact that I only have one class from Fall 2018; if that was actually the case, or if I only have data from one class, but taught two. In fact, it is the latter; some data from that year is not accessible.
+
+Even though I normally teach as many classes in the Spring as in the Fall, we have seen (in Elementary statistics - Enrollment) that Spring enrollment is lower, again potentially explaining the differences in the variance we have seen. But there is another potential explanation.
+
+
+
+
+
+
+### Research question: How did students perform in the COVID semester when classes went online?
+
+We're going to do this in a limited way. According to my records, this was the only Spring semester that I taught a 2 - 2:50 class. To remove confounding variables as far as possible, I am going to look at my MW 1 - 2, TR 12:30 - 1:20 Spring 2020 COVID data, and compare it to my MW 1 - 2, TR 12:30 - 1:20 Spring non-COVID data. This does have the negative effect of decreasing the size of the data sets.
+
+
+```{r}
+covid<- student_data[student_data$Time == "MW 100-150, TR 1230-0120, then online (COVID)",]
+covid$Time<-"COVID"
+```
+
+
+
+```{r}
+noncovid<-student_data[student_data$Semester == "Spring",]
+noncovid<-noncovid[noncovid$Time == "MW 100-150, TR 1230-0120",]
+noncovid$Time<-"Non-COVID"
+
+covid_noncovid<-rbind(covid,noncovid)
+
+names(covid_noncovid)[names(covid_noncovid) == 'Time'] <- 'COVID_Status'
+```
+
+We can now look at final grades.
+
+```{r}
+covid_noncovid$Letter<-factor(covid_noncovid$Letter)
+covid_noncovid$COVID_Status<-factor(covid_noncovid$COVID_Status)
+
+ggplot(data = covid_noncovid, aes(x=COVID_Status, fill=Letter) ) + geom_bar(position="fill")
+```
+
+One way to interpret this data is as follows.  I was extremely lenient during the COVID semester; for example, all tests were taken online, open-books, and open-notes. This diminished the number of "average" grades; if a student made an effort, it was much easier to get an A than during a typical semester. But, because of the changes in the way material was presented and the class was structured, marginal students were negatively effected.  Hence, the increase in both "A"s and "F"s. Overall, students benefitted in terms of their final grades, although perhaps not in knowledge gained.
+
+### Research question: When do students who do not complete the class usually stop participating?
+
+We have to work with limited data here; from the dataset, I can say that a student has stopped participating when they first get a "0" in any test.
+
+I am going to look at semesters where I only give three tests.
+
+```{r}
+noncompletion_data<- student_data[is.na(student_data$Test4),]
+```
+This leaves
+```{r}
+print(nrow(noncompletion_data))
+```
+students
+
+Of those,
+
+```{r}
+no_final<-noncompletion_data[noncompletion_data$Final == 0,]
+print(nrow(no_final))
+```
+did not complete the final exam.
+
+```{r}
+no_final<-select(no_final, Test1,Test2,Test3,Final)
+matplot(t(no_final), xlab = "Test", ylab="Score", ylim=c(0,100),type = "l", axes=F)
+axis(2)
+no_final_labels<-c("Test1","Test2","Test3","Final")
+axis(side=1,at=1:4,labels=no_final_labels)
+abline(h=70,lwd=3)
+```
+
+This graph is very busy; each connected set of points represents the test grades of one student. Given the limited data size, it might be easier to manually inspect the table.
+
+```{r}
+print(no_final)
+```
+
+### Research question: Is class size corrolated to class performance?
+
+I think there is certainly value in small courses beyond this, but what effect does it have on student grades? 
+
+```{r}
+plotmeans(Overall ~ Enrollment, data = student_data)
+```
+
+No effect, seemingly.  In interpreting the above graph, the values below the horizontal axis are the class size, and the value above the axis is the number of students I've had with the class size; for example, I've had two classes with exactly twenty students, for n = 40.
